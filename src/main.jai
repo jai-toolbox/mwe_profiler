@@ -1,49 +1,39 @@
 #import "Basic";
 #import "tbx/time";
-
-/*
-
-what we want: 
-- we set a target frame rate. We have a cicular array which is a history buffer, whenever a frame takes longer than the target frame rate than we will store the frame into this history buffer, we can then look at this frame and figure out why it was slow.
-
-*/
-
-Frame_Profiler :: struct {
-    section_timer : Section_Timer;
-    // slow_frames : 
-    target_frame_rate_hz : u32 = 60;
-    target_frame_period : float = 1.0 / 60;
-}
-
-start_section :: () {
-}
-
-end_section :: () {
-    // if duration was longer, then bad. Add that frame to the bad list of frames.
-    // need a way to check the history of the thing we just added
-    // what if it returned the section or something?
-    // or what if we just reached into the history at the history index to get the one we just created.
-}
-
+#import "tbx/frame_profiler";
 
 main :: () {
-    timer: Section_Timer;
-    init_section_timer(*timer);
+
+    // why is it on the heap? 
+    // because the frame proflier allocates a bunch of storage for its fixed size pools and stuff
+    // and it probably won't fit on the stack, on windows it doesn't by default, that's the only reason.
+
+    fp := New(Frame_Profiler);
+    defer free(fp);
+
+    init_frame_profiler(fp, target_hz = 1000);  // 1ms target so tiny sleeps register as "slow"
     
-    for frame: 0..100 {
-        start_section(*timer, "tick");
+    for frame: 0..99 {
+        start_frame(fp);
         
-        start_section(*timer, "update");
-        sleep_milliseconds(1);
-        end_section(*timer, "update");
-        
-        start_section(*timer, "rendering");
-        sleep_milliseconds(5);
-        end_section(*timer, "rendering");
+            start_section(*fp.section_timer, "update");
+                start_section(*fp.section_timer, "physics");
+                sleep_milliseconds(0);
+                end_section(*fp.section_timer, "physics");
+                
+                start_section(*fp.section_timer, "ai");
+                sleep_milliseconds(0);
+                end_section(*fp.section_timer, "ai");
+            end_section(*fp.section_timer, "update");
             
-        end_section(*timer, "tick");
+            start_section(*fp.section_timer, "render");
+            // simulate occasional spike
+            if frame % 20 == 10 then sleep_milliseconds(5);
+            else sleep_milliseconds(0);
+            end_section(*fp.section_timer, "render");
+        
+        end_frame(fp);
     }
     
-    averaged := get_averaged_sections(*timer);
-    print_averaged_section(averaged.root);
+    print_profiler_summary(fp);
 }
